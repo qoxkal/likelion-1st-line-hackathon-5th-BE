@@ -1,0 +1,54 @@
+# 공통 설정
+spring:
+  application:
+    name: booktalk
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  servlet:
+    multipart:
+      max-file-size: 15MB      # 명세서: 업로드 최대 15MB
+      max-request-size: 16MB
+  jpa:
+    open-in-view: false
+
+server:
+  servlet:
+    context-path: /v1          # 명세서 Base URL의 /v1
+
+app:
+  cors:
+    # 쉼표로 구분. 로컬 프론트 주소가 다르면 바꿔 주세요.
+    allowed-origins: http://localhost:5173,http://localhost:3000,https://beamish-florentine-cebf64.netlify.app
+
+---
+# 로컬 개발용: 설치 없이 바로 쓰는 메모리 DB(H2). 서버를 끄면 데이터가 사라진다.
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:h2:mem:booktalk;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true            # http://localhost:8080/v1/h2-console
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+
+---
+# 배포용: Supabase(PostgreSQL). 값은 환경변수로 넣고 코드에 직접 쓰지 않는다.
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
