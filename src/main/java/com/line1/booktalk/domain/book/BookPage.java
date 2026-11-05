@@ -67,6 +67,10 @@ public class BookPage extends BaseEntity {
 
     private Instant originalDeletedAt;
 
+    /** AI가 사진에서 읽은 글자 */
+    @Column(length = 4000)
+    private String ocrText;
+
     public static BookPage create(Book book, User owner, Child child, String pageLabel,
                                   String storageKey, String contentType, long sizeBytes, String sha256) {
         BookPage page = new BookPage();
@@ -87,8 +91,9 @@ public class BookPage extends BaseEntity {
         this.status = PageStatus.ANALYZING;
     }
 
-    public void markAnalyzed() {
+    public void markAnalyzed(String ocrText) {
         this.status = PageStatus.ANALYZED;
+        this.ocrText = ocrText;
     }
 
     public void markFailed() {

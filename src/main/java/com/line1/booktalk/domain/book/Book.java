@@ -89,6 +89,10 @@ public class Book extends BaseEntity {
         return IntStream.rangeClosed(minAge, maxAge).boxed().toList();
     }
 
+    public void addExpressionCount(int count) {
+        this.expressionCount += count;
+    }
+
     public void changeExpressionCount(int expressionCount) {
         this.expressionCount = expressionCount;
     }

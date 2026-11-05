@@ -13,6 +13,7 @@ public final class IdGenerator {
     public static final String BOOK = "bok";
     public static final String BOOK_PAGE = "bpg";
     public static final String ANALYSIS_JOB = "job";
+    public static final String EXPRESSION = "exp";
 
     private IdGenerator() {
     }
