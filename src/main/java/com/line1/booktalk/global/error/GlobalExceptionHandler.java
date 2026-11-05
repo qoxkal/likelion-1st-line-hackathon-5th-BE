@@ -3,7 +3,10 @@ package com.line1.booktalk.global.error;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -49,6 +52,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return build(ErrorCode.VALIDATION_ERROR,
                 List.of(new ErrorResponse.FieldDetail(e.getName(), "형식이 올바르지 않아요.")));
+    }
+
+    /** 필수 쿼리/폼 값이 빠진 경우 (예: childId 없음) */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e) {
+        return build(ErrorCode.VALIDATION_ERROR,
+                List.of(new ErrorResponse.FieldDetail(e.getParameterName(), "필수 값이에요.")));
+    }
+
+    /** multipart 요청에서 파일 파트가 빠진 경우 */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(MissingServletRequestPartException e) {
+        return build(ErrorCode.VALIDATION_ERROR,
+                List.of(new ErrorResponse.FieldDetail(e.getRequestPartName(), "필수 값이에요.")));
+    }
+
+    /** 요청 Content-Type이 맞지 않는 경우 (예: 업로드에 JSON으로 보냄) */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaType(HttpMediaTypeNotSupportedException e) {
+        return build(ErrorCode.VALIDATION_ERROR, List.of());
     }
 
     /** 업로드 파일이 application.yml의 최대 크기를 넘은 경우 */
