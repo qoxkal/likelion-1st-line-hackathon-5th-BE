@@ -16,6 +16,11 @@ server:
     context-path: /v1          # 명세서 Base URL의 /v1
 
 app:
+  jwt:
+    # 배포할 때는 반드시 환경변수 JWT_SECRET으로 32자 이상 임의의 값을 넣는다
+    secret: ${JWT_SECRET:local-dev-secret-change-me-0123456789abcdef}
+    # 게스트 토큰 유효기간(초). 해커톤에서는 refresh token 없이 30일로 길게
+    access-token-ttl-seconds: 2592000
   cors:
     # 쉼표로 구분. 로컬 프론트 주소가 다르면 바꿔 주세요.
     allowed-origins: http://localhost:5173,http://localhost:3000,https://beamish-florentine-cebf64.netlify.app
