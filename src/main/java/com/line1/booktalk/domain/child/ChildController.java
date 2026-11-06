@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 import java.util.List;
 
@@ -47,4 +48,15 @@ public class ChildController {
                                                   @Valid @RequestBody UpdateChildRequest request) {
         return ApiResponse.of(childService.updateChild(userId, childId, request));
     }
+
+    @DeleteMapping("/{childId}")
+    public ApiResponse<DeleteChildResponse> deleteChild(@LoginUser String userId,
+                                                        @PathVariable String childId,
+                                                        @Valid @RequestBody DeleteChildRequest request) {
+        childService.deleteChild(userId, childId, request.confirmation());
+        return ApiResponse.of(new DeleteChildResponse(java.time.Instant.now()));
+    }
+
+    public record DeleteChildRequest(@jakarta.validation.constraints.NotBlank String confirmation) {}
+    public record DeleteChildResponse(java.time.Instant deletionScheduledAt) {}
 }

@@ -38,11 +38,16 @@ public class BookUploadService {
     @Transactional
     public UploadPageResponse upload(String userId, String childId, String bookId,
                                      String bookTitle, String pageLabel, MultipartFile file) {
+        byte[] bytes = readBytes(file);
+        return uploadBytes(userId, childId, bookId, bookTitle, pageLabel, bytes);
+    }
+
+    @Transactional
+    public UploadPageResponse uploadBytes(String userId, String childId, String bookId,
+                                          String bookTitle, String pageLabel, byte[] bytes) {
         User user = userService.getActiveUser(userId);
         Child child = childService.getOwnedChild(userId, childId);
-
-        // 1) 파일 검사: 비어 있는지, 크기, 실제 형식
-        byte[] bytes = readBytes(file);
+        if (bytes == null || bytes.length == 0) throw new BusinessException(ErrorCode.VALIDATION_ERROR, "사진 파일을 첨부해 주세요.");
         if (bytes.length > MAX_BYTES) {
             throw new BusinessException(ErrorCode.FILE_TOO_LARGE);
         }

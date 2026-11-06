@@ -27,6 +27,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/auth/guest",   // 토큰을 받는 곳이라 토큰 없이 호출
+                        "/auth/refresh",
                         "/health",
                         "/error"
                 );

@@ -15,6 +15,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -27,6 +29,7 @@ public class AnalysisService {
     private final BookPageRepository bookPageRepository;
     private final ChildService childService;
     private final ApplicationEventPublisher eventPublisher;
+    private final PageExpressionRepository pageExpressionRepository;
 
     /**
      * 분석 작업을 QUEUED로 만들고 바로 돌려준다.
@@ -63,9 +66,51 @@ public class AnalysisService {
         return new AnalyzePageResponse(job.getId(), job.getStatus().name(), POLL_AFTER_MS);
     }
 
+    @Transactional
+    public AnalyzePageResponse requestAnalysisByPage(String userId, AnalyzePageRequest request) {
+        BookPage page = bookPageRepository.findByIdAndOwnerId(request.pageId(), userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        return requestAnalysis(userId, page.getBook().getId(), request);
+    }
+
     public AnalysisJobResponse getJob(String userId, String jobId) {
         AnalysisJob job = analysisJobRepository.findByIdAndPageOwnerId(jobId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         return AnalysisJobResponse.from(job, POLL_AFTER_MS);
     }
+
+    public PageAnalysisResult getResult(String userId, String pageId) {
+        BookPage page = bookPageRepository.findByIdAndOwnerId(pageId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (page.getStatus() != PageStatus.ANALYZED) {
+            throw new BusinessException(ErrorCode.INVALID_STATE, "아직 분석이 완료되지 않았어요.");
+        }
+        List<ExpressionResult> expressions = pageExpressionRepository.findAllByPageIdOrderByCreatedAtAsc(pageId)
+                .stream().map(e -> new ExpressionResult(e.getId(), e.getText(), e.getType().name(),
+                        e.getDefinition(), new Translation(e.getTranslationLanguage().getCode(), e.getTranslation()),
+                        e.getSourceSentence(), e.getConfidence())).toList();
+        AnalysisJob job = analysisJobRepository.findFirstByPageIdAndStatusOrderByCreatedAtDesc(pageId, JobStatus.COMPLETED)
+                .orElse(null);
+        return new PageAnalysisResult(pageId, page.getOcrText(), "ko", expressions,
+                new ModelInfo(job == null ? null : job.getModel(), job == null ? null : job.getPromptVersion()));
+    }
+
+    @Transactional
+    public AnalysisJobResponse cancel(String userId, String jobId) {
+        AnalysisJob job = analysisJobRepository.findByIdAndPageOwnerId(jobId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!job.isInProgress()) {
+            throw new BusinessException(ErrorCode.INVALID_STATE, "취소할 수 있는 작업이 아니에요.");
+        }
+        job.cancel();
+        if (job.getPage().getStatus() == PageStatus.ANALYZING) job.getPage().markFailed();
+        return AnalysisJobResponse.from(job, POLL_AFTER_MS);
+    }
+
+    public record Translation(String language, String text) {}
+    public record ExpressionResult(String id, String text, String type, String definition,
+                                   Translation translation, String sourceSentence, Double confidence) {}
+    public record ModelInfo(String provider, String promptVersion) {}
+    public record PageAnalysisResult(String pageId, String ocrText, String language,
+                                     List<ExpressionResult> expressions, ModelInfo model) {}
 }

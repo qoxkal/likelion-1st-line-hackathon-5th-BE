@@ -12,9 +12,13 @@ public final class HashUtils {
 
     /** SHA-256 해시를 16진수 문자열(64자)로 돌려준다 */
     public static String sha256(String value) {
+        return sha256(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static String sha256(byte[] value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest(value);
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);

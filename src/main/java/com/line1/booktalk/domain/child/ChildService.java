@@ -69,4 +69,12 @@ public class ChildService {
         return childRepository.findByIdAndUserId(childId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
+
+    @Transactional
+    public void deleteChild(String userId, String childId, String confirmation) {
+        if (!"DELETE_CHILD_PROFILE".equals(confirmation)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "삭제 확인 문구가 올바르지 않아요.");
+        }
+        childRepository.delete(getOwnedChild(userId, childId));
+    }
 }

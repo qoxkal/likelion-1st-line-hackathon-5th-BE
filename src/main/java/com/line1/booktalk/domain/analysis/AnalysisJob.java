@@ -18,6 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.concurrent.CancellationException;
 
 /**
  * 페이지 분석 작업. 요청이 오면 QUEUED로 만들고 jobId를 바로 돌려준 뒤,
@@ -81,6 +82,7 @@ public class AnalysisJob extends BaseEntity {
     }
 
     public void start(String model, String promptVersion) {
+        if (status != JobStatus.QUEUED) throw new CancellationException("작업이 이미 취소되었거나 시작되었습니다.");
         this.status = JobStatus.RUNNING;
         this.stage = AnalysisStage.READING_TEXT;
         this.progress = 10;
@@ -90,6 +92,7 @@ public class AnalysisJob extends BaseEntity {
     }
 
     public void moveTo(AnalysisStage stage, int progress) {
+        if (status != JobStatus.RUNNING) throw new CancellationException("작업이 더 이상 실행 중이 아닙니다.");
         this.stage = stage;
         this.progress = progress;
     }

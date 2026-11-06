@@ -12,4 +12,6 @@ public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, String
 
     /** 소유권 검사용: 내 페이지의 작업만 조회 */
     Optional<AnalysisJob> findByIdAndPageOwnerId(String id, String ownerId);
+
+    Optional<AnalysisJob> findFirstByPageIdAndStatusOrderByCreatedAtDesc(String pageId, JobStatus status);
 }

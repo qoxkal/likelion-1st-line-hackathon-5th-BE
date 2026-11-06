@@ -7,4 +7,6 @@ import java.util.List;
 public interface PageExpressionRepository extends JpaRepository<PageExpression, String> {
 
     List<PageExpression> findAllByPageIdOrderByCreatedAtAsc(String pageId);
+
+    long countByPageBookIdAndPageOwnerId(String bookId, String ownerId);
 }

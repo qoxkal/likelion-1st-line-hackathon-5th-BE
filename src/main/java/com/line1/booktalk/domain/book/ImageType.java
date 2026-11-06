@@ -43,4 +43,9 @@ public enum ImageType {
         }
         return Optional.empty();
     }
+
+    public static Optional<ImageType> fromContentType(String contentType) {
+        for (ImageType value : values()) if (value.contentType.equalsIgnoreCase(contentType)) return Optional.of(value);
+        return Optional.empty();
+    }
 }

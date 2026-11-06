@@ -14,6 +14,15 @@ public final class IdGenerator {
     public static final String BOOK_PAGE = "bpg";
     public static final String ANALYSIS_JOB = "job";
     public static final String EXPRESSION = "exp";
+    public static final String REFRESH_SESSION = "rfs";
+    public static final String BOOKMARK = "bmk";
+    public static final String LEARNING_EVENT = "evt";
+    public static final String SENTENCE_PRACTICE = "spr";
+    public static final String CONVERSATION_SESSION = "cvs";
+    public static final String CONVERSATION_MESSAGE = "msg";
+    public static final String REVIEW = "rev";
+    public static final String DEVICE = "dev";
+    public static final String UPLOAD = "upl";
 
     private IdGenerator() {
     }

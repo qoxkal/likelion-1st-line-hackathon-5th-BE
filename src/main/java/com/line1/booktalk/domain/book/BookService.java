@@ -2,6 +2,7 @@ package com.line1.booktalk.domain.book;
 
 import com.line1.booktalk.domain.book.dto.BookDetailResponse;
 import com.line1.booktalk.domain.book.dto.BookSummaryResponse;
+import com.line1.booktalk.domain.analysis.PageExpressionRepository;
 import com.line1.booktalk.global.common.CursorCodec;
 import com.line1.booktalk.global.error.BusinessException;
 import com.line1.booktalk.global.error.ErrorCode;
@@ -27,6 +28,7 @@ public class BookService {
 
     private final BookRepository bookRepository;
     private final BookPageRepository bookPageRepository;
+    private final PageExpressionRepository pageExpressionRepository;
 
     public record BookPageResult(List<BookSummaryResponse> books, String nextCursor, boolean hasNext) {
     }
@@ -66,8 +68,7 @@ public class BookService {
     public BookDetailResponse getBook(String userId, String bookId) {
         Book book = getVisibleBook(userId, bookId);
         List<BookPage> pages = bookPageRepository.findAllByBookIdAndOwnerIdOrderByCreatedAtAsc(bookId, userId);
-        // TODO: 본 단어 수는 학습 기록(learning-events, 근영 담당)이 생기면 연결한다. 지금은 0
-        int exploredWords = 0;
+        int exploredWords = Math.toIntExact(pageExpressionRepository.countByPageBookIdAndPageOwnerId(bookId, userId));
         return BookDetailResponse.of(book, exploredWords, pages);
     }
 

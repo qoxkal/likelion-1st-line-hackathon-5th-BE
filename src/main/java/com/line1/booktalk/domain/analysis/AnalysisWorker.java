@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
+import java.util.concurrent.CancellationException;
 
 /**
  * 분석 작업을 백그라운드에서 처리한다.
@@ -83,6 +84,8 @@ public class AnalysisWorker {
             transactionTemplate.executeWithoutResult(status ->
                     getJob(jobId).getPage().markOriginalDeleted());
 
+        } catch (CancellationException e) {
+            log.info("페이지 분석 취소 jobId={}", jobId);
         } catch (Exception e) {
             // 실패하면 원본 사진은 재시도용으로 남겨둔다. 로그에는 jobId와 오류 종류만 남긴다
             log.error("페이지 분석 실패 jobId={} error={}", jobId, e.getClass().getSimpleName(), e);

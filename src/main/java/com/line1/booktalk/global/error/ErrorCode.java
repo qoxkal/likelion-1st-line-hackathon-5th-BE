@@ -18,6 +18,7 @@ public enum ErrorCode {
     // 401
     UNAUTHORIZED(401, "인증이 필요해요.", false),
     TOKEN_EXPIRED(401, "인증이 만료됐어요. 앱을 다시 시작해 주세요.", false),
+    REFRESH_TOKEN_REUSED(401, "이미 사용된 갱신 토큰이에요. 다시 로그인해 주세요.", false),
 
     // 403
     FORBIDDEN(403, "권한이 없어요.", false),
@@ -32,6 +33,8 @@ public enum ErrorCode {
     DUPLICATE_RESOURCE(409, "이미 존재하는 정보예요.", false),
     CHILD_LIMIT_EXCEEDED(409, "아이 프로필을 더 만들 수 없어요.", false),
     ANALYSIS_ALREADY_RUNNING(409, "이 페이지는 이미 분석 중이에요.", false),
+    ACTIVE_CONVERSATION_EXISTS(409, "진행 중인 대화를 먼저 끝내 주세요.", false),
+    CONVERSATION_TURN_LIMIT(409, "대화 횟수 제한에 도달했어요.", false),
 
     // 413, 415
     FILE_TOO_LARGE(413, "15MB 이하 사진만 올릴 수 있어요.", false),
@@ -40,6 +43,8 @@ public enum ErrorCode {
     // 422
     IMAGE_QUALITY_LOW(422, "글자가 잘 보이지 않아요. 다시 찍어 주세요.", false),
     CONTENT_UNSAFE(422, "처리할 수 없는 내용이 포함돼 있어요.", false),
+    TEXT_NOT_ALLOWED(422, "사용할 수 없는 문장이에요.", false),
+    AUDIO_TOO_LONG(413, "60초 이하 음성만 사용할 수 있어요.", false),
 
     // 429
     RATE_LIMITED(429, "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.", true),
