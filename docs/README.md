@@ -13,6 +13,8 @@
 7. [`backend.history/07-현황과-남은-과제.md`](backend.history/07-현황과-남은-과제.md) — 완료 범위와 후속 작업
 8. [`backend.history/08-AI-Agent-연동-가이드.md`](backend.history/08-AI-Agent-연동-가이드.md) — AI/TTS/STT 공급자 교체 지점
 9. [`backend.history/09-남은-검증-과제와-체크리스트.md`](backend.history/09-남은-검증-과제와-체크리스트.md) — 출시 전 검증 항목
+10. [`backend.history/10-PlanRAG-GraphRAG-구현.md`](backend.history/10-PlanRAG-GraphRAG-구현.md) — RAG 라우팅·계획·그래프·검증 구현
+11. [`backend.history/11-RAG-발표-정리.md`](backend.history/11-RAG-발표-정리.md) — 발표 순서, 구현 범위, 시연 및 예상 질문
 
 상위 요약 문서:
 

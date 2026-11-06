@@ -24,6 +24,9 @@ STORAGE_DIR=/private/path/uploads
 
 검증은 `.\gradlew.bat test`로 실행합니다.
 
+PlanRAG/GraphRAG 답변을 사용하려면 저장소의 `ai-service`를 8090 포트로 먼저 실행하거나,
+저장소 루트에서 `docker compose up --build`를 실행합니다.
+
 ## 구현 범위
 
 - 게스트 로그인, refresh token 회전/재사용 감지, 로그아웃
@@ -35,6 +38,7 @@ STORAGE_DIR=/private/path/uploads
 - 오늘의 복습, 답안 처리, 학습 요약
 - 알림 설정 및 푸시 기기 등록
 - TTS/STT 계약 API
+- Hybrid RAG, GraphRAG Local/Global, 제한형 PlanRAG 기반 `POST /v1/ai/answers`
 
 페이지 분석, 문장 첨삭, 대화, TTS/STT의 외부 공급자가 아직 정해지지 않은 부분은 로컬 결정적
 구현으로 동작합니다. `PageAnalyzer`와 각 서비스 경계를 실제 공급자 어댑터로 교체하면 API 계약과

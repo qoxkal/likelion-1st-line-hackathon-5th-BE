@@ -27,6 +27,11 @@ app:
   cors:
     # 쉼표로 구분. 로컬 프론트 주소가 다르면 바꿔 주세요.
     allowed-origins: http://localhost:5173,http://localhost:3000,https://beamish-florentine-cebf64.netlify.app
+  ai:
+    enabled: ${AI_SERVICE_ENABLED:true}
+    base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:8090}
+    connect-timeout-ms: ${AI_SERVICE_CONNECT_TIMEOUT_MS:1500}
+    read-timeout-ms: ${AI_SERVICE_READ_TIMEOUT_MS:8000}
 
 ---
 # 로컬 개발용: 설치 없이 바로 쓰는 메모리 DB(H2). 서버를 끄면 데이터가 사라진다.

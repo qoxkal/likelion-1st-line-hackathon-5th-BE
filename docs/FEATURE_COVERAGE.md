@@ -14,6 +14,7 @@
 | 오늘의 복습 | `/reviews/today`, `/answers` | O | 미작성 | 불필요 |
 | 학습 현황 | `/learning-summary` | O | 미작성 | 불필요 |
 | 알림 | `/notification-settings`, `/devices` | O | Context | FCM/APNs 필요 |
+| 근거 기반 AI 답변 | `/ai/answers` | O | Python core | 실제 LLM 선택 |
 
 ## 커버리지 해석
 

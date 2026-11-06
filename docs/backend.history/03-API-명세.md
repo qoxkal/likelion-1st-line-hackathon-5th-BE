@@ -68,7 +68,24 @@ Base URL: `/v1`
 4. `POST /speech/synthesis` — TTS 요청
 5. `POST /speech/transcriptions` — STT 작업 요청
 
-## 9. 응답 형식
+## 9. AI 근거 답변
+
+1. `POST /ai/answers` — 질문 복잡도에 따라 Hybrid, Graph Local/Global, PlanRAG를 선택하고 근거·신뢰도·검증 결과를 반환
+
+요청 예시:
+
+```json
+{
+  "query": "4세 아이의 학습 기록을 보고 두근두근을 어떻게 가르칠지 추천해줘",
+  "childId": "chd_...",
+  "vocabularyIds": ["exp_..."],
+  "mode": "AUTO"
+}
+```
+
+`mode`는 `AUTO`, `HYBRID`, `GRAPH_LOCAL`, `GRAPH_GLOBAL`, `PLAN` 중 하나다. 일반적으로 `AUTO`를 사용한다.
+
+## 10. 응답 형식
 
 성공:
 

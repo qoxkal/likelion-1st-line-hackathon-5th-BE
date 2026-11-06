@@ -9,6 +9,7 @@
 5. Rate Limit과 사용자별 일일 quota
 6. 아이 삭제를 예약 삭제/복구 유예 방식으로 변경
 7. Secrets Manager 또는 배포 플랫폼 secret 연결
+8. ExtractiveAnswerGenerator를 선택한 LLM provider 어댑터로 교체하고 verifier 회귀 테스트
 
 ## P1 — 제품 완성
 

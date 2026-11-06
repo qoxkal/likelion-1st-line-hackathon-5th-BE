@@ -9,4 +9,6 @@ public interface PageExpressionRepository extends JpaRepository<PageExpression, 
     List<PageExpression> findAllByPageIdOrderByCreatedAtAsc(String pageId);
 
     long countByPageBookIdAndPageOwnerId(String bookId, String ownerId);
+
+    List<PageExpression> findAllByPageOwnerIdOrderByCreatedAtDesc(String ownerId);
 }
