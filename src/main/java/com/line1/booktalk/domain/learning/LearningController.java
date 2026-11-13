@@ -347,14 +347,14 @@ class LearningService {
                                                                           LearningController.SentencePracticeRequest req) {
         Child child = childService.getOwnedChild(userId, childId); PageExpression exp = ownedExpression(userId, req.vocabularyId());
         String original = req.sentence().trim();
-        if (canUseAi(exp)) {
-            SentencePractice reviewed = aiPractice(child, exp, original);
-            if (reviewed != null) {
-                SentencePractice saved = practiceRepository.save(reviewed);
-                bookmarkRepository.findByChildIdAndExpressionId(childId, exp.getId()).ifPresent(b -> b.advance(LearningStatus.SENTENCE_DONE));
-                return response(saved);
-            }
+        // AI를 켜 둔 상태에서는 AI 판정만 쓴다. AI가 실패하면 오류로 돌려주고, 단순 규칙으로 GOOD을 주지 않는다
+        if (aiClient.isRemote()) {
+            if (!canUseAi(exp)) throw new BusinessException(ErrorCode.VALIDATION_ERROR, "이 단어는 아직 문장 첨삭을 할 수 없어요.");
+            SentencePractice saved = practiceRepository.save(aiPractice(child, exp, original));
+            bookmarkRepository.findByChildIdAndExpressionId(childId, exp.getId()).ifPresent(b -> b.advance(LearningStatus.SENTENCE_DONE));
+            return response(saved);
         }
+        // 아래는 AI 서버 없이 로컬에서 테스트할 때만 쓰는 단순 규칙
         boolean used = original.contains(exp.getText());
         String suggested = original.replace(exp.getText() + "을 해요", exp.getText() + "해요")
                 .replace(exp.getText() + "를 해요", exp.getText() + "해요");
@@ -366,17 +366,16 @@ class LearningService {
         return response(saved);
     }
 
-    /** AI 문장 피드백. 실패하면 null (기존 규칙으로 대신 처리한다) */
+    /** AI 문장 피드백. AI가 실패하거나 알 수 없는 결과를 주면 오류(503)를 낸다 */
     private SentencePractice aiPractice(Child child, PageExpression exp, String original) {
         LearningAiClient.ReviewResult r;
         try {
-            LearningAiClient.SentenceReview review = aiClient.reviewSentence(original, info(exp));
-            r = review.result();
+            r = aiClient.reviewSentence(original, info(exp)).result();
         } catch (BusinessException ex) {
-            log.warn("AI 문장 피드백 실패, 기존 규칙 사용 expressionId={} reason={}", exp.getId(), ex.getMessage());
-            return null;
+            log.warn("AI 문장 피드백 실패 expressionId={} reason={}", exp.getId(), ex.getMessage());
+            throw ex;
         }
-        if (r == null || r.kind() == null) return null;
+        if (r == null || r.kind() == null) throw invalidAiResult();
         boolean contains = original.contains(exp.getText());
         return switch (r.kind()) {
             case "natural" -> SentencePractice.create(child, exp, original, original, true, true, "GOOD",
@@ -388,8 +387,11 @@ class LearningService {
                     blankOr(r.hint(), "표현의 뜻을 다시 살펴보고 문장을 바꿔 보세요."), AI_PROMPT_VERSION);
             case "missing" -> SentencePractice.create(child, exp, original, original, false, false, "TARGET_NOT_USED",
                     blankOr(r.hint(), "목표 표현을 문장에 넣어 보세요."), AI_PROMPT_VERSION);
-            default -> null;
+            default -> throw invalidAiResult();
         };
+    }
+    private static BusinessException invalidAiResult() {
+        return new BusinessException(ErrorCode.AI_PROVIDER_UNAVAILABLE, "AI 첨삭 결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.");
     }
     private static String blankOr(String text, String fallback) { return text == null || text.isBlank() ? fallback : text.trim(); }
     private static String join(String a, String b) {

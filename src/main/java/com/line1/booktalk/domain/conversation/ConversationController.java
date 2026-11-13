@@ -176,12 +176,16 @@ class ConversationService {
         PageExpression exp = ownedExpression(userId, req.vocabularyId());
         ConversationSession session = sessionRepository.save(ConversationSession.create(child, exp, req));
         String line = opening(req.scene()); String hint = "'" + exp.getText() + "'을(를) 넣어서 대답해 보세요.";
-        if (canUseAi(exp)) {
+        // AI를 켜 둔 상태에서 AI가 실패하면 오류로 돌려준다 (트랜잭션이 취소돼서 대화도 만들어지지 않는다)
+        if (aiClient.isRemote()) {
+            requireAi(exp);
             try {
                 LearningAiClient.DialogueOpening ai = aiClient.openDialogue(info(exp), session.getScene());
+                if (ai.childLine() == null || ai.childLine().isBlank()) throw invalidAiResult();
                 line = ai.childLine(); hint = ai.hint();
             } catch (BusinessException ex) {
-                log.warn("AI 대화 시작 실패, 기본 문장 사용 expressionId={} reason={}", exp.getId(), ex.getMessage());
+                log.warn("AI 대화 시작 실패 expressionId={} reason={}", exp.getId(), ex.getMessage());
+                throw ex;
             }
         }
         ConversationMessage opening = messageRepository.save(ConversationMessage.child(session, line,
@@ -204,18 +208,22 @@ class ConversationService {
         List<ConversationMessage> history = messageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
         String lastChildLine = lastChildLine(history);
 
-        // 기본(AI를 못 쓸 때): 답은 모두 통과, 미리 정해 둔 아이 대사
+        // 기본(AI 서버 없이 로컬 테스트할 때만): 답은 모두 통과, 미리 정해 둔 아이 대사
         String status = session.getTurnCount() + 1 >= MAX_TURNS ? "complete" : "continue";
         String childLine = used ? "응! 나도 " + exp.getText() + "해! 그다음엔 어떻게 될까?" : "그다음에는 어떤 일이 일어날까?";
         String hint = "'" + exp.getText() + "'을(를) 넣어서 대답해 보세요.";
         String feedback = used ? "목표 표현을 잘 썼어요!" : "좋아요. 다음에는 '" + exp.getText() + "'도 넣어 보세요.";
-        if (canUseAi(exp)) {
+        // AI를 켜 둔 상태에서 AI가 실패하면 답을 통과시키지 않고 오류로 돌려준다 (보호자 답도 저장되지 않는다)
+        if (aiClient.isRemote()) {
+            requireAi(exp);
             try {
                 LearningAiClient.DialogueTurn ai = aiClient.answerDialogue(info(exp), session.getScene(),
                         acceptedExchanges(history), new LearningAiClient.Exchange(lastChildLine, answer));
+                if (ai.status() == null || !Set.of("retry", "continue", "complete").contains(ai.status())) throw invalidAiResult();
                 status = ai.status(); childLine = ai.childLine(); hint = ai.hint(); feedback = ai.feedback();
             } catch (BusinessException ex) {
-                log.warn("AI 대화 응답 실패, 기본 문장 사용 sessionId={} reason={}", sessionId, ex.getMessage());
+                log.warn("AI 대화 응답 실패 sessionId={} reason={}", sessionId, ex.getMessage());
+                throw ex;
             }
         }
 
@@ -288,6 +296,12 @@ class ConversationService {
             else if (Boolean.TRUE.equals(m.getAccepted())) result.add(new LearningAiClient.Exchange(child, m.getText()));
         }
         return result.size() > MAX_TURNS - 1 ? result.subList(result.size() - (MAX_TURNS - 1), result.size()) : result;
+    }
+    private void requireAi(PageExpression e) {
+        if (!canUseAi(e)) throw new BusinessException(ErrorCode.VALIDATION_ERROR, "이 단어는 아직 AI 대화를 할 수 없어요.");
+    }
+    private static BusinessException invalidAiResult() {
+        return new BusinessException(ErrorCode.AI_PROVIDER_UNAVAILABLE, "AI 대화 결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.");
     }
     private boolean canUseAi(PageExpression e) {
         return e.getTranslationLanguage() != null && aiClient.supports(e.getTranslationLanguage().getCode())
