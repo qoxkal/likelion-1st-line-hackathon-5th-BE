@@ -21,8 +21,8 @@ Base URL: `/v1`
 
 ## 3. 도서와 업로드
 
-1. `GET /books` — 도서 목록 및 cursor 검색
-2. `GET /books/{bookId}` — 도서 상세
+1. `GET /books` — 도서 목록 및 cursor 검색. 각 항목에 `expressions: [{ id, text }]` 포함
+2. `GET /books/{bookId}` — 도서 상세 및 표현 목록
 3. `POST /books/uploads` — multipart 업로드와 페이지 등록을 한 번에 수행
 4. `POST /uploads/image` — 업로드 세션 생성
 5. `PUT /uploads/{uploadId}/content` — 파일 본문 업로드
@@ -49,10 +49,11 @@ Base URL: `/v1`
 
 ## 6. 대화
 
-1. `POST /children/{childId}/conversation-sessions` — 대화 시작
-2. `POST /conversation-sessions/{sessionId}/messages` — 메시지 전송
-3. `POST /conversation-sessions/{sessionId}/complete` — 대화 종료
-4. `GET /conversation-sessions/{sessionId}` — 대화 기록 조회
+1. `POST /children/{childId}/conversation-sessions` — 대화 시작. 기존 ACTIVE 세션은 자동 종료
+2. `GET /children/{childId}/conversation-sessions?status=ACTIVE` — 진행 중인 대화 조회
+3. `POST /conversation-sessions/{sessionId}/messages` — 메시지 전송
+4. `POST /conversation-sessions/{sessionId}/complete` — 대화 종료
+5. `GET /conversation-sessions/{sessionId}` — 대화 기록 조회
 
 ## 7. 복습과 요약
 

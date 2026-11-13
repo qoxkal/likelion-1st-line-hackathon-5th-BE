@@ -77,4 +77,9 @@ public class PageExpression extends BaseEntity {
         expression.confidence = confidence;
         return expression;
     }
+
+    /** DEMO 도서의 표현은 모든 로그인 사용자가, 사용자 도서의 표현은 소유자만 쓸 수 있다. */
+    public boolean isAccessibleBy(String userId) {
+        return page.getBook().isDemo() || page.isOwnedBy(userId);
+    }
 }

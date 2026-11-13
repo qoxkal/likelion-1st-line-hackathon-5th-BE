@@ -3,6 +3,7 @@ package com.line1.booktalk.domain.book;
 import com.line1.booktalk.domain.book.dto.BookDetailResponse;
 import com.line1.booktalk.domain.book.dto.BookSummaryResponse;
 import com.line1.booktalk.domain.analysis.PageExpressionRepository;
+import com.line1.booktalk.domain.analysis.PageExpression;
 import com.line1.booktalk.global.common.CursorCodec;
 import com.line1.booktalk.global.error.BusinessException;
 import com.line1.booktalk.global.error.ErrorCode;
@@ -59,7 +60,8 @@ public class BookService {
         }
 
         return new BookPageResult(
-                books.stream().map(BookSummaryResponse::from).toList(),
+                books.stream().map(book -> BookSummaryResponse.from(book,
+                        pageExpressionRepository.findAllByPageBookIdOrderByCreatedAtAsc(book.getId()))).toList(),
                 nextCursor,
                 hasNext
         );
@@ -67,9 +69,14 @@ public class BookService {
 
     public BookDetailResponse getBook(String userId, String bookId) {
         Book book = getVisibleBook(userId, bookId);
-        List<BookPage> pages = bookPageRepository.findAllByBookIdAndOwnerIdOrderByCreatedAtAsc(bookId, userId);
-        int exploredWords = Math.toIntExact(pageExpressionRepository.countByPageBookIdAndPageOwnerId(bookId, userId));
-        return BookDetailResponse.of(book, exploredWords, pages);
+        List<BookPage> pages = book.isDemo()
+                ? bookPageRepository.findFirstByBookIdOrderByCreatedAtAsc(bookId).stream().toList()
+                : bookPageRepository.findAllByBookIdAndOwnerIdOrderByCreatedAtAsc(bookId, userId);
+        List<PageExpression> expressions =
+                pageExpressionRepository.findAllByPageBookIdOrderByCreatedAtAsc(bookId);
+        int exploredWords = book.isDemo() ? 0
+                : Math.toIntExact(pageExpressionRepository.countByPageBookIdAndPageOwnerId(bookId, userId));
+        return BookDetailResponse.of(book, exploredWords, pages, expressions);
     }
 
     /** 볼 수 없는 도서(남의 책장 도서)도 없는 도서처럼 404로 처리한다 */

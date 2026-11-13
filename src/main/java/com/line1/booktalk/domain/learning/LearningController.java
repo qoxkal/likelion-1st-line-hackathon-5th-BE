@@ -445,7 +445,7 @@ class LearningService {
     }
     private PageExpression ownedExpression(String userId, String id) {
         PageExpression e = expressionRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!e.getPage().isOwnedBy(userId)) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND); return e;
+        if (!e.isAccessibleBy(userId)) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND); return e;
     }
     private LearningController.SentencePracticeResponse response(SentencePractice p) {
         String version = p.getPromptVersion() == null ? "local-rule-v1" : p.getPromptVersion();

@@ -101,4 +101,8 @@ public class Book extends BaseEntity {
     public boolean isVisibleTo(String userId) {
         return source != BookSource.MY_LIBRARY || (owner != null && owner.getId().equals(userId));
     }
+
+    public boolean isDemo() {
+        return source == BookSource.DEMO;
+    }
 }

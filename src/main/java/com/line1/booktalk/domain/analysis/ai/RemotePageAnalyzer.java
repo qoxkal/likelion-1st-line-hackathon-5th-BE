@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * AI 서버(영채님 레포)의 POST /v1/photo-analyses를 호출하는 진짜 분석기.
@@ -67,11 +68,14 @@ public class RemotePageAnalyzer implements PageAnalyzer {
             throw new PageAnalysisException("AI_TIMEOUT",
                     "분석이 오래 걸리고 있어요. 잠시 후 다시 시도해 주세요.", false, true);
         } catch (RestClientException e) {
-            throw new PageAnalysisException("AI_PROVIDER_UNAVAILABLE",
-                    "AI 서비스가 잠시 응답하지 않아요. 잠시 후 다시 시도해 주세요.", false, true);
+            // JSON 역직렬화 실패 등 HTTP 응답은 왔지만 계약과 다른 경우
+            log.warn("AI 사진 분석 응답 파싱 실패", e);
+            throw new PageAnalysisException("AI_RESPONSE_INVALID",
+                    "분석 결과 형식이 올바르지 않아요. 잠시 후 다시 시도해 주세요.", false, true);
         }
 
-        if (response == null || response.status() == null) {
+        if (response == null || response.status() == null
+                || !Set.of("ok", "no_text", "no_expressions").contains(response.status())) {
             throw new PageAnalysisException("AI_RESPONSE_INVALID",
                     "분석 결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.", false, true);
         }
@@ -83,8 +87,12 @@ public class RemotePageAnalyzer implements PageAnalyzer {
         }
 
         // ok: 표현 있음 / no_expressions: 글자는 있지만 표현이 없음 (정상 완료, 0개)
-        List<Expression> expressions = response.expressions() == null ? List.of()
-                : response.expressions().stream()
+        List<PhotoExpression> received = response.expressions() == null ? List.of() : response.expressions();
+        if ("ok".equals(response.status()) && (received.isEmpty() || received.stream().anyMatch(this::isInvalid))) {
+            throw new PageAnalysisException("AI_RESPONSE_INVALID",
+                    "분석 결과 형식이 올바르지 않아요. 잠시 후 다시 시도해 주세요.", false, true);
+        }
+        List<Expression> expressions = received.stream()
                     .map(e -> new Expression(
                             e.expression(), toType(e.type()), e.definition(),
                             e.translation(), e.sourceSentence(), null))
@@ -128,8 +136,15 @@ public class RemotePageAnalyzer implements PageAnalyzer {
         return switch (type) {
             case "onomatopoeia" -> ExpressionType.ONOMATOPOEIA;
             case "idiom" -> ExpressionType.IDIOM;
+            case "interjection" -> ExpressionType.INTERJECTION;
             default -> ExpressionType.MIMETIC;
         };
+    }
+
+    private boolean isInvalid(PhotoExpression expression) {
+        return expression == null || expression.expression() == null || expression.expression().isBlank()
+                || expression.type() == null || expression.type().isBlank()
+                || expression.definition() == null || expression.definition().isBlank();
     }
 
     /** AI 서버 응답 형식 (필드 이름은 AI 서버의 snake_case 그대로) */

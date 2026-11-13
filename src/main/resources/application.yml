@@ -27,16 +27,16 @@ app:
     local-dir: ${STORAGE_DIR:./uploads}
   cors:
     # 쉼표로 구분. 로컬 프론트 주소가 다르면 바꿔 주세요.
-    allowed-origins: http://localhost:5173,http://localhost:3000,https://beamish-florentine-cebf64.netlify.app
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:https://line1-booktalk-frontend.vercel.app,http://localhost:5173,http://localhost:3000,https://beamish-florentine-cebf64.netlify.app}
   ai:
     enabled: ${AI_SERVICE_ENABLED:true}
     base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:8090}
     connect-timeout-ms: ${AI_SERVICE_CONNECT_TIMEOUT_MS:1500}
-    read-timeout-ms: ${AI_SERVICE_READ_TIMEOUT_MS:8000}
+    read-timeout-ms: ${AI_SERVICE_READ_TIMEOUT_MS:60000}
     # 페이지 분석기: fake(가짜, 기본값) / remote(AI 서버 /v1/photo-analyses 호출)
     page-analyzer: ${AI_PAGE_ANALYZER:fake}
     # 사진 분석은 오래 걸려서 따로 길게 기다린다 (60초)
-    page-analysis-timeout-ms: ${AI_PAGE_ANALYSIS_TIMEOUT_MS:60000}
+    page-analysis-timeout-ms: ${AI_PAGE_ANALYSIS_TIMEOUT_MS:${AI_SERVICE_READ_TIMEOUT_MS:60000}}
     # 문장 피드백, 단어 설명, 대화, 음성 기능 (remote면 AI 서버 사용). 따로 안 정하면 page-analyzer 값을 따라간다
     features: ${AI_FEATURES:${AI_PAGE_ANALYZER:fake}}
     features-timeout-ms: ${AI_FEATURES_TIMEOUT_MS:60000}

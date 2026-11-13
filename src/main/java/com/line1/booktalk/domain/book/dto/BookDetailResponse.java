@@ -2,6 +2,7 @@ package com.line1.booktalk.domain.book.dto;
 
 import com.line1.booktalk.domain.book.Book;
 import com.line1.booktalk.domain.book.BookPage;
+import com.line1.booktalk.domain.analysis.PageExpression;
 
 import java.util.List;
 
@@ -15,7 +16,8 @@ public record BookDetailResponse(
         int expressionCount,
         String coverUrl,
         Progress progress,
-        List<PageSummary> pages
+        List<PageSummary> pages,
+        List<BookSummaryResponse.VocabularySummary> expressions
 ) {
     public record Progress(int exploredWords, int totalWords) {
     }
@@ -36,7 +38,8 @@ public record BookDetailResponse(
         }
     }
 
-    public static BookDetailResponse of(Book book, int exploredWords, List<BookPage> pages) {
+    public static BookDetailResponse of(Book book, int exploredWords, List<BookPage> pages,
+                                        List<PageExpression> expressions) {
         return new BookDetailResponse(
                 book.getId(),
                 book.getTitle(),
@@ -46,7 +49,8 @@ public record BookDetailResponse(
                 book.getExpressionCount(),
                 book.getCoverUrl(),
                 new Progress(exploredWords, book.getExpressionCount()),
-                pages.stream().map(PageSummary::from).toList()
+                pages.stream().map(PageSummary::from).toList(),
+                expressions.stream().map(BookSummaryResponse.VocabularySummary::from).toList()
         );
     }
 }

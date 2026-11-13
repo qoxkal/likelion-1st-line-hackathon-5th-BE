@@ -12,4 +12,6 @@ public interface BookPageRepository extends JpaRepository<BookPage, String> {
 
     /** 도서 상세에서 내가 찍은 페이지 목록 */
     List<BookPage> findAllByBookIdAndOwnerIdOrderByCreatedAtAsc(String bookId, String ownerId);
+
+    Optional<BookPage> findFirstByBookIdOrderByCreatedAtAsc(String bookId);
 }

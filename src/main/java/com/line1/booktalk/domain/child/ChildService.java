@@ -70,6 +70,13 @@ public class ChildService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
+    /** 대화 세션 교체처럼 같은 아이 기준으로 직렬화가 필요한 작업에서 사용한다. */
+    @Transactional
+    public Child getOwnedChildForUpdate(String userId, String childId) {
+        return childRepository.findOwnedByIdForUpdate(childId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
     @Transactional
     public void deleteChild(String userId, String childId, String confirmation) {
         if (!"DELETE_CHILD_PROFILE".equals(confirmation)) {

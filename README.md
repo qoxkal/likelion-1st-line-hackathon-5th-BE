@@ -20,7 +20,11 @@ DB_USERNAME=...
 DB_PASSWORD=...
 JWT_SECRET=32-byte-or-longer-random-secret
 STORAGE_DIR=/private/path/uploads
+APP_CORS_ALLOWED_ORIGINS=https://line1-booktalk-frontend.vercel.app,http://localhost:5173
+AI_SERVICE_READ_TIMEOUT_MS=60000
 ```
+
+`AI_PAGE_ANALYSIS_TIMEOUT_MS`를 따로 지정하면 사진 분석에는 그 값이 우선 적용됩니다.
 
 검증은 `.\gradlew.bat test`로 실행합니다.
 
@@ -31,10 +35,11 @@ PlanRAG/GraphRAG 답변을 사용하려면 저장소의 `ai-service`를 8090 포
 
 - 게스트 로그인, refresh token 회전/재사용 감지, 로그아웃
 - 내 계정 및 아이 프로필 CRUD
+- DEMO 도서 4권 자동 시드 및 책별 표현 id/text 조회
 - 도서 목록/상세, 직접 multipart 업로드와 signed-URL 방식의 2단계 업로드
 - 비동기 페이지 분석, 상태/결과 조회, 취소
 - 표현 상세, 북마크, 학습 이벤트, 문장 첨삭
-- AI 대화 세션/메시지/완료/조회
+- AI 대화 세션/메시지/완료/ACTIVE 목록 조회 (새 대화 시작 시 기존 ACTIVE 세션 자동 종료)
 - 오늘의 복습, 답안 처리, 학습 요약
 - 알림 설정 및 푸시 기기 등록
 - TTS/STT 계약 API

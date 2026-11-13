@@ -39,6 +39,13 @@ public class ConversationController {
         return ApiResponse.of(service.start(userId, childId, request));
     }
 
+    /** 다른 기기/브라우저에서도 진행 중인 대화를 찾아 이어가거나 종료할 수 있다. */
+    @GetMapping("/children/{childId}/conversation-sessions")
+    ApiResponse<List<SessionResponse>> sessions(@LoginUser String userId, @PathVariable String childId,
+                                                @RequestParam(required = false) ConversationStatus status) {
+        return ApiResponse.of(service.sessions(userId, childId, status));
+    }
+
     @PostMapping("/conversation-sessions/{sessionId}/messages")
     ApiResponse<MessageExchange> message(@LoginUser String userId, @PathVariable String sessionId,
                                          @Valid @RequestBody MessageRequest request) {
@@ -110,7 +117,8 @@ class ConversationSession extends BaseEntity {
 
 interface ConversationSessionRepository extends org.springframework.data.jpa.repository.JpaRepository<ConversationSession, String> {
     Optional<ConversationSession> findByIdAndChildUserId(String id, String userId);
-    boolean existsByChildIdAndStatus(String childId, ConversationStatus status);
+    List<ConversationSession> findAllByChildIdOrderByCreatedAtDesc(String childId);
+    List<ConversationSession> findAllByChildIdAndStatusOrderByCreatedAtDesc(String childId, ConversationStatus status);
 }
 
 @Getter @Entity @Table(name = "conversation_messages", uniqueConstraints = @UniqueConstraint(columnNames = {"session_id", "client_message_id"}))
@@ -156,9 +164,15 @@ class ConversationService {
     private final ConversationMessageRepository messageRepository;
 
     @Transactional ConversationController.SessionResponse start(String userId, String childId, ConversationController.StartRequest req) {
-        Child child = childService.getOwnedChild(userId, childId);
-        if (sessionRepository.existsByChildIdAndStatus(childId, ConversationStatus.ACTIVE))
-            throw new BusinessException(ErrorCode.ACTIVE_CONVERSATION_EXISTS);
+        Child child = childService.getOwnedChildForUpdate(userId, childId);
+        // 다른 탭에서 세션을 잃어버렸어도 새 대화를 바로 시작할 수 있게 기존 세션을 정상 종료한다.
+        List<ConversationSession> previous = sessionRepository
+                .findAllByChildIdAndStatusOrderByCreatedAtDesc(childId, ConversationStatus.ACTIVE);
+        previous.forEach(ConversationSession::complete);
+        if (!previous.isEmpty()) {
+            log.info("기존 ACTIVE 대화를 종료하고 새 대화를 시작합니다 childId={} completedCount={}",
+                    childId, previous.size());
+        }
         PageExpression exp = ownedExpression(userId, req.vocabularyId());
         ConversationSession session = sessionRepository.save(ConversationSession.create(child, exp, req));
         String line = opening(req.scene()); String hint = "'" + exp.getText() + "'을(를) 넣어서 대답해 보세요.";
@@ -228,18 +242,27 @@ class ConversationService {
         ConversationSession s = ownedSession(userId, id); if (s.getStatus() == ConversationStatus.ACTIVE) s.complete(); return response(s, null);
     }
     ConversationController.SessionResponse get(String userId, String id) { return response(ownedSession(userId, id), null); }
+    List<ConversationController.SessionResponse> sessions(String userId, String childId, ConversationStatus status) {
+        childService.getOwnedChild(userId, childId);
+        List<ConversationSession> sessions = status == null
+                ? sessionRepository.findAllByChildIdOrderByCreatedAtDesc(childId)
+                : sessionRepository.findAllByChildIdAndStatusOrderByCreatedAtDesc(childId, status);
+        return sessions.stream().map(session -> response(session, null)).toList();
+    }
 
     private ConversationController.MessageExchange exchange(ConversationSession s, ConversationMessage user, ConversationMessage ai) {
         return new ConversationController.MessageExchange(message(user), message(ai), mission(s), s.getStatus().name());
     }
     private ConversationController.SessionResponse response(ConversationSession s, ConversationMessage opening) {
         List<ConversationController.MessageResponse> messages = messageRepository.findAllBySessionIdOrderByCreatedAtAsc(s.getId()).stream().map(this::message).toList();
-        if (opening == null && !messages.isEmpty()) opening = messageRepository.findAllBySessionIdOrderByCreatedAtAsc(s.getId()).getFirst();
+        ConversationController.MessageResponse openingResponse = opening == null
+                ? (messages.isEmpty() ? null : messages.getFirst())
+                : message(opening);
         ConversationController.Summary summary = s.getStatus() == ConversationStatus.COMPLETED
                 ? new ConversationController.Summary(s.getTurnCount(), s.isTargetUsed(), s.isTargetUsed() ? "GOOD" : "PRACTICE_NEEDED", s.getEncouragement(), s.getNextTip()) : null;
         return new ConversationController.SessionResponse(s.getId(), s.getStatus().name(), new ConversationController.Persona("민우", s.getChild().getAge()),
                 mission(s),
-                opening == null ? null : message(opening), messages, summary);
+                openingResponse, messages, summary);
     }
     private ConversationController.MessageResponse message(ConversationMessage m) {
         return new ConversationController.MessageResponse(m.getId(), m.getRole().name(), m.getText(), null, m.getTranslationHint(),
@@ -277,7 +300,7 @@ class ConversationService {
     private ConversationSession ownedSession(String userId, String id) { return sessionRepository.findByIdAndChildUserId(id, userId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)); }
     private PageExpression ownedExpression(String userId, String id) {
         PageExpression e = expressionRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!e.getPage().isOwnedBy(userId)) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND); return e;
+        if (!e.isAccessibleBy(userId)) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND); return e;
     }
     private String opening(String scene) { return scene + "에서 무슨 일이 생길 것 같아?"; }
 }
