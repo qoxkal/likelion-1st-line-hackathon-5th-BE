@@ -36,6 +36,9 @@ app:
     page-analyzer: ${AI_PAGE_ANALYZER:fake}
     # 사진 분석은 오래 걸려서 따로 길게 기다린다 (60초)
     page-analysis-timeout-ms: ${AI_PAGE_ANALYSIS_TIMEOUT_MS:60000}
+    # 문장 피드백, 단어 설명, 대화, 음성 기능 (remote면 AI 서버 사용). 따로 안 정하면 page-analyzer 값을 따라간다
+    features: ${AI_FEATURES:${AI_PAGE_ANALYZER:fake}}
+    features-timeout-ms: ${AI_FEATURES_TIMEOUT_MS:60000}
 
 ---
 # 로컬 개발용: 설치 없이 바로 쓰는 메모리 DB(H2). 서버를 끄면 데이터가 사라진다.
