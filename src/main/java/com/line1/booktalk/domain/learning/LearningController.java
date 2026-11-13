@@ -99,6 +99,16 @@ public class LearningController {
         return ApiResponse.of(service.answer(userId, reviewId, request));
     }
 
+    /**
+     * 최근 학습한 단어: 학습 이벤트(learning-events)를 단어별로 모아 최근 순으로 돌려준다.
+     * stage: VIEWED(봤음) / SENTENCE_DONE(문장 연습 완료) / CONVERSATION_DONE(대화 완료)
+     */
+    @GetMapping("/children/{childId}/recent-vocabulary")
+    ApiResponse<List<RecentVocabulary>> recent(@LoginUser String userId, @PathVariable String childId,
+                                               @RequestParam(defaultValue = "10") int limit) {
+        return ApiResponse.of(service.recent(userId, childId, Math.max(1, Math.min(limit, 50))));
+    }
+
     @GetMapping("/children/{childId}/learning-summary")
     ApiResponse<LearningSummary> summary(@LoginUser String userId, @PathVariable String childId,
                                          @RequestParam(defaultValue = "WEEK") SummaryPeriod period) {
@@ -134,6 +144,8 @@ public class LearningController {
     public record ReviewAnswerRequest(@NotNull Object answer, @PositiveOrZero long responseTimeMs,
                                       Confidence confidence) {}
     public record ReviewAnswerResponse(boolean correct, String feedback, Instant nextReviewAt, int stage) {}
+    public record RecentVocabulary(String vocabularyId, String text, String type, String bookId, String bookTitle,
+                                   String stage, Instant lastStudiedAt) {}
     public record LearningSummary(String period, long discoveredWords, long bookmarkedWords,
                                   long sentencePractices, long conversationSessions,
                                   double reviewAccuracy, int streakDays) {}
@@ -185,6 +197,7 @@ interface LearningEventRepository extends org.springframework.data.jpa.repositor
     boolean existsByEventId(String eventId);
     long countDistinctExpressionByChildIdAndOccurredAtAfter(String childId, Instant after);
     List<LearningEvent> findAllByChildIdAndOccurredAtAfter(String childId, Instant after);
+    List<LearningEvent> findAllByChildIdOrderByOccurredAtDesc(String childId);
 }
 
 @Getter @Entity @Table(name = "sentence_practices") @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -447,6 +460,30 @@ class LearningService {
         String answer = req.answer() instanceof Collection<?> c ? String.join(" ", c.stream().map(String::valueOf).toList()) : String.valueOf(req.answer());
         boolean correct = answer.trim().equalsIgnoreCase(item.getExpression().getDefinition().trim()); item.answer(correct);
         return new LearningController.ReviewAnswerResponse(correct, correct ? "정답이에요!" : "표현의 뜻을 다시 살펴봐요.", item.getDueAt(), item.getStage());
+    }
+
+    List<LearningController.RecentVocabulary> recent(String userId, String childId, int limit) {
+        childService.getOwnedChild(userId, childId);
+        // 이벤트는 최근 순이라, 단어가 처음 나올 때가 그 단어를 마지막으로 공부한 때다
+        Map<String, LearningEvent> latest = new LinkedHashMap<>();
+        Map<String, LearningStatus> stage = new HashMap<>();
+        for (LearningEvent ev : eventRepository.findAllByChildIdOrderByOccurredAtDesc(childId)) {
+            if (ev.getExpression() == null) continue;
+            String id = ev.getExpression().getId();
+            latest.putIfAbsent(id, ev);
+            LearningStatus s = switch (ev.getType()) {
+                case WORD_VIEWED, AUDIO_PLAYED, SENTENCE_STARTED -> LearningStatus.VIEWED;
+                case SENTENCE_COMPLETED -> LearningStatus.SENTENCE_DONE;
+                case DIALOGUE_COMPLETED -> LearningStatus.CONVERSATION_DONE;
+            };
+            stage.merge(id, s, (a, b) -> a.ordinal() >= b.ordinal() ? a : b);
+        }
+        return latest.values().stream().limit(limit).map(ev -> {
+            PageExpression e = ev.getExpression();
+            return new LearningController.RecentVocabulary(e.getId(), e.getText(), e.getType().name(),
+                    e.getPage().getBook().getId(), e.getPage().getBook().getTitle(),
+                    stage.get(e.getId()).name(), ev.getOccurredAt());
+        }).toList();
     }
 
     LearningController.LearningSummary summary(String userId, String childId, SummaryPeriod period) {

@@ -79,6 +79,16 @@ public class BookService {
         return BookDetailResponse.of(book, exploredWords, pages, expressions);
     }
 
+    /** 내 책장 도서 이름 바꾸기. 시연용 도서는 못 바꾸고, 남의 도서는 404 */
+    @Transactional
+    public BookDetailResponse rename(String userId, String bookId, String title) {
+        Book book = getVisibleBook(userId, bookId);
+        if (book.isDemo()) throw new BusinessException(ErrorCode.INVALID_STATE, "시연용 책은 이름을 바꿀 수 없어요.");
+        if (!book.isOwnedBy(userId)) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        book.rename(title.trim());
+        return getBook(userId, bookId);
+    }
+
     /** 볼 수 없는 도서(남의 책장 도서)도 없는 도서처럼 404로 처리한다 */
     public Book getVisibleBook(String userId, String bookId) {
         Book book = bookRepository.findById(bookId)

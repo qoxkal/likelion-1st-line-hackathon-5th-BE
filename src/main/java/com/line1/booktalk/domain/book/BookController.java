@@ -8,7 +8,12 @@ import com.line1.booktalk.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -49,6 +54,17 @@ public class BookController {
     public ApiResponse<BookDetailResponse> getBook(@LoginUser String userId,
                                                    @PathVariable String bookId) {
         return ApiResponse.of(bookService.getBook(userId, bookId));
+    }
+
+    /** 내 책장 도서 이름 바꾸기: PATCH /books/{bookId} { "title": "새 이름" } */
+    @PatchMapping("/{bookId}")
+    public ApiResponse<BookDetailResponse> rename(@LoginUser String userId, @PathVariable String bookId,
+                                                  @Valid @RequestBody RenameRequest request) {
+        return ApiResponse.of(bookService.rename(userId, bookId, request.title()));
+    }
+
+    public record RenameRequest(@NotBlank(message = "책 이름을 입력해 주세요.")
+                                @Size(max = 100, message = "책 이름은 100자 이하여야 해요.") String title) {
     }
 
     /**

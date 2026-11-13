@@ -102,6 +102,16 @@ public class Book extends BaseEntity {
         return source != BookSource.MY_LIBRARY || (owner != null && owner.getId().equals(userId));
     }
 
+    /** 내 책장 도서 이름 바꾸기 */
+    public void rename(String title) {
+        this.title = title;
+    }
+
+    /** 사용자 책장 도서이고 이 사용자가 주인인지 */
+    public boolean isOwnedBy(String userId) {
+        return source == BookSource.MY_LIBRARY && owner != null && owner.getId().equals(userId);
+    }
+
     public boolean isDemo() {
         return source == BookSource.DEMO;
     }
