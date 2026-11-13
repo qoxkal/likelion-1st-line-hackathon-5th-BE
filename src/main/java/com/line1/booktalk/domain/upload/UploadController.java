@@ -49,7 +49,7 @@ public class UploadController {
     }
 
     public record CreateUploadRequest(@NotBlank @Size(max = 255) String fileName, @NotBlank String contentType,
-                                      @Positive @Max(15728640) long sizeBytes, @NotBlank @Pattern(regexp = "[0-9a-fA-F]{64}") String sha256) {}
+                                      @Positive @Max(4194304) long sizeBytes, @NotBlank @Pattern(regexp = "[0-9a-fA-F]{64}") String sha256) {}
     public record CreateUploadResponse(String uploadId, String uploadUrl, String method, Instant expiresAt) {}
     public record UploadStatusResponse(String uploadId, String status) {}
     public record RegisterPageRequest(@NotBlank String childId, String bookId, String bookTitle,

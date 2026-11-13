@@ -1,6 +1,7 @@
 package com.line1.booktalk.domain.analysis.ai;
 
 import com.line1.booktalk.domain.analysis.ExpressionType;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -8,9 +9,11 @@ import java.util.List;
 /**
  * AI 모델이 정해지기 전까지 쓰는 가짜 분석기.
  * 실제 분석처럼 몇 초 기다린 뒤 정해진 결과를 돌려준다. 프론트에서 분석 흐름(대기 → 진행 → 완료)을
- * 미리 연결해볼 수 있게 하는 용도다. 진짜 AI 구현을 추가하면 이 클래스는 지운다.
+ * 미리 연결해볼 수 있게 하는 용도다. AI 서버 없이 로컬에서 테스트하거나, 시연 중 AI가 안 될 때
+ * app.ai.page-analyzer=fake 로 바꿔서 쓴다.
  */
 @Component
+@ConditionalOnProperty(name = "app.ai.page-analyzer", havingValue = "fake", matchIfMissing = true)
 public class FakePageAnalyzer implements PageAnalyzer {
 
     @Override

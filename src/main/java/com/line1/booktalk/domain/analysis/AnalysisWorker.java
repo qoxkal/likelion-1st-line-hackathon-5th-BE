@@ -1,5 +1,6 @@
 package com.line1.booktalk.domain.analysis;
 
+import com.line1.booktalk.domain.analysis.ai.PageAnalysisException;
 import com.line1.booktalk.domain.analysis.ai.PageAnalyzer;
 import com.line1.booktalk.domain.book.BookPage;
 import com.line1.booktalk.global.common.Language;
@@ -86,10 +87,14 @@ public class AnalysisWorker {
 
         } catch (CancellationException e) {
             log.info("페이지 분석 취소 jobId={}", jobId);
+        } catch (PageAnalysisException e) {
+            // AI가 알려준 이유를 그대로 작업에 기록한다 (사진은 재시도용으로 남김)
+            log.warn("페이지 분석 실패 jobId={} code={}", jobId, e.getCode());
+            markFailed(jobId, e.getCode(), e.getUserMessage(), e.isRejected());
         } catch (Exception e) {
             // 실패하면 원본 사진은 재시도용으로 남겨둔다. 로그에는 jobId와 오류 종류만 남긴다
             log.error("페이지 분석 실패 jobId={} error={}", jobId, e.getClass().getSimpleName(), e);
-            markFailed(jobId);
+            markFailed(jobId, "ANALYSIS_FAILED", "분석에 실패했어요. 잠시 후 다시 시도해 주세요.", false);
         }
     }
 
@@ -97,11 +102,15 @@ public class AnalysisWorker {
         transactionTemplate.executeWithoutResult(status -> getJob(jobId).moveTo(stage, progress));
     }
 
-    private void markFailed(String jobId) {
+    private void markFailed(String jobId, String code, String message, boolean rejected) {
         try {
             transactionTemplate.executeWithoutResult(status -> {
                 AnalysisJob job = getJob(jobId);
-                job.fail("ANALYSIS_FAILED", "분석에 실패했어요. 잠시 후 다시 시도해 주세요.");
+                if (rejected) {
+                    job.reject(code, message);
+                } else {
+                    job.fail(code, message);
+                }
                 job.getPage().markFailed();
             });
         } catch (Exception e) {

@@ -53,7 +53,7 @@ public class BookController {
 
     /**
      * 그림책 페이지 사진 업로드 + 페이지 등록 (multipart/form-data)
-     * - file: 사진 (jpeg, png, webp / 최대 15MB)
+     * - file: 사진 (jpeg, png, webp / 최대 4MB)
      * - childId: 학습 대상 아이 (필수)
      * - bookId: 기존 도서에 추가할 때
      * - bookTitle: bookId가 없을 때 새 도서 제목 (내 책장에 만들어짐)
