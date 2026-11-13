@@ -29,6 +29,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "/auth/guest",   // 토큰을 받는 곳이라 토큰 없이 호출
                         "/auth/refresh",
                         "/health",
+                        "/speech/audio/**", // <audio src>는 토큰을 못 보내서 열어 둔다
                         "/error"
                 );
     }

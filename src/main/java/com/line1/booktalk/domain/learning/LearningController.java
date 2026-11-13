@@ -7,6 +7,7 @@ import com.line1.booktalk.domain.book.BookPage;
 import com.line1.booktalk.domain.book.BookPageRepository;
 import com.line1.booktalk.domain.child.Child;
 import com.line1.booktalk.domain.child.ChildService;
+import com.line1.booktalk.domain.ai.LearningAiClient;
 import com.line1.booktalk.global.auth.LoginUser;
 import com.line1.booktalk.global.common.BaseEntity;
 import com.line1.booktalk.global.common.IdGenerator;
@@ -20,6 +21,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequiredArgsConstructor
@@ -107,7 +110,7 @@ public class LearningController {
     public record VocabularyResponse(String id, String text, String romanization, String type,
                                      String definition, Translation translation, List<String> usageSituations,
                                      SourceSentence sourceSentence, List<SimilarExpression> similarExpressions,
-                                     List<String> parentTips) {}
+                                     List<String> parentTips, String childExplanation, String practiceExample) {}
     public record BookmarkResponse(String vocabularyId, String text, String type, String translation,
                                    String learningStatus, Instant reviewDueAt) {}
     public record LearningEventRequest(@NotBlank String eventId, @NotNull LearningEventType type,
@@ -192,12 +195,20 @@ class SentencePractice extends BaseEntity {
     @Column(nullable = false) private boolean meaningDelivered;
     @Column(nullable = false) private boolean targetWordUsed;
     @Column(nullable = false, length = 500) private String feedback;
+    /** 어떤 방식으로 피드백했는지 (local-rule-v1 또는 AI 서버) */
+    @Column(length = 40) private String promptVersion;
     static SentencePractice create(Child c, PageExpression e, String original, String suggested,
                                    boolean targetUsed, String assessment, String feedback) {
-        SentencePractice s = new SentencePractice(); s.id = IdGenerator.generate(IdGenerator.SENTENCE_PRACTICE);
-        s.child = c; s.expression = e; s.originalSentence = original; s.suggestedSentence = suggested;
-        s.targetWordUsed = targetUsed; s.meaningDelivered = targetUsed; s.assessment = assessment; s.feedback = feedback; return s;
+        return create(c, e, original, suggested, targetUsed, targetUsed, assessment, feedback, "local-rule-v1");
     }
+    static SentencePractice create(Child c, PageExpression e, String original, String suggested, boolean targetUsed,
+                                   boolean meaningDelivered, String assessment, String feedback, String promptVersion) {
+        SentencePractice s = new SentencePractice(); s.id = IdGenerator.generate(IdGenerator.SENTENCE_PRACTICE);
+        s.child = c; s.expression = e; s.originalSentence = original; s.suggestedSentence = cut(suggested, 100);
+        s.targetWordUsed = targetUsed; s.meaningDelivered = meaningDelivered; s.assessment = assessment;
+        s.feedback = cut(feedback, 500); s.promptVersion = promptVersion; return s;
+    }
+    private static String cut(String text, int max) { return text.length() <= max ? text : text.substring(0, max); }
 }
 interface SentencePracticeRepository extends org.springframework.data.jpa.repository.JpaRepository<SentencePractice, String> {
     List<SentencePractice> findAllByChildIdOrderByCreatedAtDesc(String childId);
@@ -230,8 +241,12 @@ interface ReviewRepository extends org.springframework.data.jpa.repository.JpaRe
     List<ReviewItem> findAllByChildIdAndUpdatedAtAfter(String childId, Instant after);
 }
 
-@Service @RequiredArgsConstructor @Transactional(readOnly = true)
+@Slf4j @Service @RequiredArgsConstructor @Transactional(readOnly = true)
 class LearningService {
+    private static final String AI_PROMPT_VERSION = "sentence-reviews-v1";
+    /** 단어 설명은 표현마다 한 번만 AI에 물어보고 기억해 둔다 */
+    private final Map<String, LearningAiClient.WordLesson> lessonCache = new ConcurrentHashMap<>();
+    private final LearningAiClient aiClient;
     private final ChildService childService;
     private final PageExpressionRepository expressionRepository;
     private final BookPageRepository pageRepository;
@@ -242,11 +257,44 @@ class LearningService {
 
     LearningController.VocabularyResponse vocabulary(String userId, String id) {
         PageExpression e = ownedExpression(userId, id);
+        LearningAiClient.WordLesson lesson = wordLesson(e);
+        List<String> situations = lesson != null && lesson.situations() != null && !lesson.situations().isEmpty()
+                ? lesson.situations() : List.of("그림책을 읽을 때", "아이와 일상 대화를 할 때");
+        List<LearningController.SimilarExpression> similar = lesson != null && lesson.similarExpression() != null
+                ? List.of(new LearningController.SimilarExpression(lesson.similarExpression(), lesson.difference())) : List.of();
+        List<String> tips = lesson != null && lesson.childExplanation() != null
+                ? List.of("아이에게는 이렇게 설명해 보세요: " + lesson.childExplanation(), "표현을 몸짓과 함께 말해 보세요.")
+                : List.of("표현을 몸짓과 함께 말해 보세요.", "아이가 만든 문장을 한 번 더 확장해 주세요.");
         return new LearningController.VocabularyResponse(e.getId(), e.getText(), romanize(e.getText()), e.getType().name(),
                 e.getDefinition(), new LearningController.Translation(e.getTranslationLanguage().getCode(), e.getTranslation()),
-                List.of("그림책을 읽을 때", "아이와 일상 대화를 할 때"),
-                new LearningController.SourceSentence(e.getSourceSentence(), e.getTranslation()),
-                List.of(), List.of("표현을 몸짓과 함께 말해 보세요.", "아이가 만든 문장을 한 번 더 확장해 주세요."));
+                situations, new LearningController.SourceSentence(e.getSourceSentence(), e.getTranslation()),
+                similar, tips, lesson == null ? null : lesson.childExplanation(), lesson == null ? null : lesson.practiceExample());
+    }
+
+    /** AI 단어 설명. AI를 못 쓰거나 실패하면 null (기본 문구로 대신 보여준다) */
+    private LearningAiClient.WordLesson wordLesson(PageExpression e) {
+        if (!canUseAi(e)) return null;
+        LearningAiClient.WordLesson cached = lessonCache.get(e.getId());
+        if (cached != null) return cached;
+        try {
+            LearningAiClient.WordLesson lesson = aiClient.wordLesson(info(e));
+            lessonCache.put(e.getId(), lesson);
+            return lesson;
+        } catch (BusinessException ex) {
+            log.warn("AI 단어 설명 실패, 기본 문구 사용 expressionId={} reason={}", e.getId(), ex.getMessage());
+            return null;
+        }
+    }
+
+    private boolean canUseAi(PageExpression e) {
+        return e.getTranslationLanguage() != null && aiClient.supports(e.getTranslationLanguage().getCode())
+                && e.getDefinition() != null && !e.getDefinition().isBlank()
+                && e.getTranslation() != null && !e.getTranslation().isBlank();
+    }
+
+    private LearningAiClient.ExpressionInfo info(PageExpression e) {
+        return new LearningAiClient.ExpressionInfo(e.getText(), e.getDefinition(), e.getSourceSentence(),
+                e.getTranslationLanguage().getCode(), e.getTranslation());
     }
 
     @Transactional LearningController.BookmarkCreated bookmark(String userId, String childId, LearningController.BookmarkRequest req) {
@@ -298,7 +346,16 @@ class LearningService {
     @Transactional LearningController.SentencePracticeResponse practice(String userId, String childId,
                                                                           LearningController.SentencePracticeRequest req) {
         Child child = childService.getOwnedChild(userId, childId); PageExpression exp = ownedExpression(userId, req.vocabularyId());
-        String original = req.sentence().trim(); boolean used = original.contains(exp.getText());
+        String original = req.sentence().trim();
+        if (canUseAi(exp)) {
+            SentencePractice reviewed = aiPractice(child, exp, original);
+            if (reviewed != null) {
+                SentencePractice saved = practiceRepository.save(reviewed);
+                bookmarkRepository.findByChildIdAndExpressionId(childId, exp.getId()).ifPresent(b -> b.advance(LearningStatus.SENTENCE_DONE));
+                return response(saved);
+            }
+        }
+        boolean used = original.contains(exp.getText());
         String suggested = original.replace(exp.getText() + "을 해요", exp.getText() + "해요")
                 .replace(exp.getText() + "를 해요", exp.getText() + "해요");
         boolean natural = used && suggested.equals(original);
@@ -307,6 +364,37 @@ class LearningService {
         SentencePractice saved = practiceRepository.save(SentencePractice.create(child, exp, original, suggested, used, assessment, feedback));
         bookmarkRepository.findByChildIdAndExpressionId(childId, exp.getId()).ifPresent(b -> b.advance(LearningStatus.SENTENCE_DONE));
         return response(saved);
+    }
+
+    /** AI 문장 피드백. 실패하면 null (기존 규칙으로 대신 처리한다) */
+    private SentencePractice aiPractice(Child child, PageExpression exp, String original) {
+        LearningAiClient.ReviewResult r;
+        try {
+            LearningAiClient.SentenceReview review = aiClient.reviewSentence(original, info(exp));
+            r = review.result();
+        } catch (BusinessException ex) {
+            log.warn("AI 문장 피드백 실패, 기존 규칙 사용 expressionId={} reason={}", exp.getId(), ex.getMessage());
+            return null;
+        }
+        if (r == null || r.kind() == null) return null;
+        boolean contains = original.contains(exp.getText());
+        return switch (r.kind()) {
+            case "natural" -> SentencePractice.create(child, exp, original, original, true, true, "GOOD",
+                    "뜻이 잘 전달되고 자연스러워요.", AI_PROMPT_VERSION);
+            case "polish" -> SentencePractice.create(child, exp, original,
+                    blankOr(r.suggestedSentence(), original), true, true, "NEEDS_REVISION",
+                    join(r.goodPoint(), r.correction()), AI_PROMPT_VERSION);
+            case "meaning" -> SentencePractice.create(child, exp, original, original, contains, false, "MEANING_MISMATCH",
+                    blankOr(r.hint(), "표현의 뜻을 다시 살펴보고 문장을 바꿔 보세요."), AI_PROMPT_VERSION);
+            case "missing" -> SentencePractice.create(child, exp, original, original, false, false, "TARGET_NOT_USED",
+                    blankOr(r.hint(), "목표 표현을 문장에 넣어 보세요."), AI_PROMPT_VERSION);
+            default -> null;
+        };
+    }
+    private static String blankOr(String text, String fallback) { return text == null || text.isBlank() ? fallback : text.trim(); }
+    private static String join(String a, String b) {
+        String x = a == null ? "" : a.trim(); String y = b == null ? "" : b.trim();
+        return (x + " " + y).trim().isEmpty() ? "조금만 다듬으면 더 자연스러워요." : (x + " " + y).trim();
     }
 
     List<LearningController.SentencePracticeResponse> practices(String userId, String childId, String vocabularyId,
@@ -360,11 +448,14 @@ class LearningService {
         if (!e.getPage().isOwnedBy(userId)) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND); return e;
     }
     private LearningController.SentencePracticeResponse response(SentencePractice p) {
+        String version = p.getPromptVersion() == null ? "local-rule-v1" : p.getPromptVersion();
+        boolean local = "local-rule-v1".equals(version);
         List<LearningController.Highlight> highlights = p.getOriginalSentence().equals(p.getSuggestedSentence()) ? List.of()
-                : List.of(new LearningController.Highlight(p.getExpression().getText() + "을/를 해요", "불필요한 목적격 조사"));
+                : local ? List.of(new LearningController.Highlight(p.getExpression().getText() + "을/를 해요", "불필요한 목적격 조사"))
+                : List.of(new LearningController.Highlight(p.getSuggestedSentence(), "이렇게 고치면 더 자연스러워요"));
         return new LearningController.SentencePracticeResponse(p.getId(), p.getExpression().getId(), p.getExpression().getText(),
                 p.getAssessment(), p.isMeaningDelivered(), p.isTargetWordUsed(), p.getOriginalSentence(), p.getSuggestedSentence(),
-                p.getFeedback(), highlights, "local-rule-v1", p.getCreatedAt());
+                p.getFeedback(), highlights, version, p.getCreatedAt());
     }
     private String romanize(String text) { return text; }
 }
