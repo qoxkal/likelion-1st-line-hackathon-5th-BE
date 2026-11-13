@@ -3,6 +3,8 @@ package com.line1.booktalk.domain.learning;
 import com.line1.booktalk.domain.analysis.ExpressionType;
 import com.line1.booktalk.domain.analysis.PageExpression;
 import com.line1.booktalk.domain.analysis.PageExpressionRepository;
+import com.line1.booktalk.domain.analysis.ExpressionTranslationRepository;
+import com.line1.booktalk.global.common.Language;
 import com.line1.booktalk.domain.book.BookPage;
 import com.line1.booktalk.domain.book.BookPageRepository;
 import com.line1.booktalk.domain.child.Child;
@@ -37,8 +39,9 @@ public class LearningController {
     private final LearningService service;
 
     @GetMapping("/vocabulary/{vocabularyId}")
-    ApiResponse<VocabularyResponse> vocabulary(@LoginUser String userId, @PathVariable String vocabularyId) {
-        return ApiResponse.of(service.vocabulary(userId, vocabularyId));
+    ApiResponse<VocabularyResponse> vocabulary(@LoginUser String userId, @PathVariable String vocabularyId,
+                                               @RequestParam(required = false) String language) {
+        return ApiResponse.of(service.vocabulary(userId, vocabularyId, language));
     }
 
     @PostMapping("/children/{childId}/bookmarks")
@@ -247,6 +250,7 @@ class LearningService {
     /** 단어 설명은 표현마다 한 번만 AI에 물어보고 기억해 둔다 */
     private final Map<String, LearningAiClient.WordLesson> lessonCache = new ConcurrentHashMap<>();
     private final LearningAiClient aiClient;
+    private final ExpressionTranslationRepository translationRepository;
     private final ChildService childService;
     private final PageExpressionRepository expressionRepository;
     private final BookPageRepository pageRepository;
@@ -255,9 +259,15 @@ class LearningService {
     private final SentencePracticeRepository practiceRepository;
     private final ReviewRepository reviewRepository;
 
-    LearningController.VocabularyResponse vocabulary(String userId, String id) {
+    /**
+     * language를 주면 그 언어 번역을 준다. 저장된 번역이 없으면 text는 null (프론트가 앱 번역을 쓴다).
+     * language가 없으면 분석할 때 저장한 번역을 준다.
+     */
+    LearningController.VocabularyResponse vocabulary(String userId, String id, String languageCode) {
         PageExpression e = ownedExpression(userId, id);
-        LearningAiClient.WordLesson lesson = wordLesson(e);
+        Language language = languageCode == null || languageCode.isBlank() ? e.getTranslationLanguage() : Language.from(languageCode);
+        String translated = translationIn(e, language);
+        LearningAiClient.WordLesson lesson = wordLesson(e, language, translated);
         List<String> situations = lesson != null && lesson.situations() != null && !lesson.situations().isEmpty()
                 ? lesson.situations() : List.of("그림책을 읽을 때", "아이와 일상 대화를 할 때");
         List<LearningController.SimilarExpression> similar = lesson != null && lesson.similarExpression() != null
@@ -266,19 +276,31 @@ class LearningService {
                 ? List.of("아이에게는 이렇게 설명해 보세요: " + lesson.childExplanation(), "표현을 몸짓과 함께 말해 보세요.")
                 : List.of("표현을 몸짓과 함께 말해 보세요.", "아이가 만든 문장을 한 번 더 확장해 주세요.");
         return new LearningController.VocabularyResponse(e.getId(), e.getText(), romanize(e.getText()), e.getType().name(),
-                e.getDefinition(), new LearningController.Translation(e.getTranslationLanguage().getCode(), e.getTranslation()),
-                situations, new LearningController.SourceSentence(e.getSourceSentence(), e.getTranslation()),
+                e.getDefinition(), new LearningController.Translation(language == null ? null : language.getCode(), translated),
+                situations, new LearningController.SourceSentence(e.getSourceSentence(), translated),
                 similar, tips, lesson == null ? null : lesson.childExplanation(), lesson == null ? null : lesson.practiceExample());
     }
 
-    /** AI 단어 설명. AI를 못 쓰거나 실패하면 null (기본 문구로 대신 보여준다) */
-    private LearningAiClient.WordLesson wordLesson(PageExpression e) {
+    /** 원하는 언어의 번역. 분석할 때 언어와 같으면 그 번역, 아니면 따로 저장된 번역 (없으면 null) */
+    private String translationIn(PageExpression e, Language language) {
+        if (language == null || language == e.getTranslationLanguage()) return e.getTranslation();
+        return translationRepository.findByExpressionIdAndLanguage(e.getId(), language)
+                .map(com.line1.booktalk.domain.analysis.ExpressionTranslation::getText).orElse(null);
+    }
+
+    /** AI 단어 설명. AI를 못 쓰거나 실패하면 null (기본 문구로 대신 보여준다). 언어별로 한 번만 물어본다 */
+    private LearningAiClient.WordLesson wordLesson(PageExpression e, Language language, String translated) {
         if (!canUseAi(e)) return null;
-        LearningAiClient.WordLesson cached = lessonCache.get(e.getId());
+        boolean useRequested = language != null && translated != null && !translated.isBlank() && aiClient.supports(language.getCode());
+        LearningAiClient.ExpressionInfo info = useRequested
+                ? new LearningAiClient.ExpressionInfo(e.getText(), e.getDefinition(), e.getSourceSentence(), language.getCode(), translated)
+                : info(e);
+        String cacheKey = e.getId() + "|" + info.language();
+        LearningAiClient.WordLesson cached = lessonCache.get(cacheKey);
         if (cached != null) return cached;
         try {
-            LearningAiClient.WordLesson lesson = aiClient.wordLesson(info(e));
-            lessonCache.put(e.getId(), lesson);
+            LearningAiClient.WordLesson lesson = aiClient.wordLesson(info);
+            lessonCache.put(cacheKey, lesson);
             return lesson;
         } catch (BusinessException ex) {
             log.warn("AI 단어 설명 실패, 기본 문구 사용 expressionId={} reason={}", e.getId(), ex.getMessage());

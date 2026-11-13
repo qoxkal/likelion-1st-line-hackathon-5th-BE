@@ -23,6 +23,7 @@ public final class IdGenerator {
     public static final String REVIEW = "rev";
     public static final String DEVICE = "dev";
     public static final String UPLOAD = "upl";
+    public static final String EXPRESSION_TRANSLATION = "etr";
 
     private IdGenerator() {
     }
