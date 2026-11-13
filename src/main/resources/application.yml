@@ -6,8 +6,8 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   servlet:
     multipart:
-      max-file-size: 15MB      # 명세서: 업로드 최대 15MB
-      max-request-size: 16MB
+      max-file-size: 4MB       # AI 서버가 사진을 최대 4MB까지 받는다
+      max-request-size: 5MB
   jpa:
     open-in-view: false
 
@@ -32,6 +32,10 @@ app:
     base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:8090}
     connect-timeout-ms: ${AI_SERVICE_CONNECT_TIMEOUT_MS:1500}
     read-timeout-ms: ${AI_SERVICE_READ_TIMEOUT_MS:8000}
+    # 페이지 분석기: fake(가짜, 기본값) / remote(AI 서버 /v1/photo-analyses 호출)
+    page-analyzer: ${AI_PAGE_ANALYZER:fake}
+    # 사진 분석은 오래 걸려서 따로 길게 기다린다 (60초)
+    page-analysis-timeout-ms: ${AI_PAGE_ANALYSIS_TIMEOUT_MS:60000}
 
 ---
 # 로컬 개발용: 설치 없이 바로 쓰는 메모리 DB(H2). 서버를 끄면 데이터가 사라진다.

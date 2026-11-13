@@ -26,7 +26,7 @@ import java.util.HexFormat;
 @RequiredArgsConstructor
 public class BookUploadService {
 
-    private static final long MAX_BYTES = 15L * 1024 * 1024;
+    private static final long MAX_BYTES = 4L * 1024 * 1024; // AI 서버 제한과 같게
 
     private final BookRepository bookRepository;
     private final BookPageRepository bookPageRepository;

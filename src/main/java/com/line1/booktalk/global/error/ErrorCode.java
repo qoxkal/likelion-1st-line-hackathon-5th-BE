@@ -37,7 +37,7 @@ public enum ErrorCode {
     CONVERSATION_TURN_LIMIT(409, "대화 횟수 제한에 도달했어요.", false),
 
     // 413, 415
-    FILE_TOO_LARGE(413, "15MB 이하 사진만 올릴 수 있어요.", false),
+    FILE_TOO_LARGE(413, "4MB 이하 사진만 올릴 수 있어요.", false),
     UNSUPPORTED_MEDIA_TYPE(415, "JPG, PNG, WEBP 사진만 올릴 수 있어요.", false),
 
     // 422
