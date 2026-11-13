@@ -8,6 +8,8 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * AI가 만든 읽어 주기(TTS) 음성.
@@ -28,8 +30,12 @@ public class TtsAudio extends BaseEntity {
     @Column(nullable = false, length = 300)
     private String text;
 
-    /** wav 파일 (PostgreSQL에서는 bytea) */
-    @Column(nullable = false, length = 10_000_000)
+    /**
+     * wav 파일. 칸 종류를 bytea로 직접 정한다.
+     * (크기만 크게 잡으면 Hibernate가 blob을 고르는데, PostgreSQL 모드의 H2가 blob을 몰라서 테이블이 안 만들어진다)
+     */
+    @JdbcTypeCode(SqlTypes.VARBINARY)
+    @Column(nullable = false, columnDefinition = "bytea")
     private byte[] audio;
 
     @Column(nullable = false)
