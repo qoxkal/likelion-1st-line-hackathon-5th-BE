@@ -12,6 +12,7 @@ spring:
     open-in-view: false
 
 server:
+  port: ${PORT:8080}           # Render가 정해 주는 포트를 쓴다 (로컬은 8080)
   servlet:
     context-path: /v1          # 명세서 Base URL의 /v1
 
@@ -59,7 +60,7 @@ spring:
     show-sql: true
 
 ---
-# 배포용: Supabase(PostgreSQL). 값은 환경변수로 넣고 코드에 직접 쓰지 않는다.
+# 배포용: Render PostgreSQL. 값은 환경변수로 넣고 코드에 직접 쓰지 않는다.
 spring:
   config:
     activate:
