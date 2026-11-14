@@ -271,6 +271,7 @@ class LearningService {
     private final LearningEventRepository eventRepository;
     private final SentencePracticeRepository practiceRepository;
     private final ReviewRepository reviewRepository;
+    private final EntityManager entityManager;
 
     /**
      * language를 주면 그 언어 번역을 준다. 저장된 번역이 없으면 text는 null (프론트가 앱 번역을 쓴다).
@@ -462,28 +463,50 @@ class LearningService {
         return new LearningController.ReviewAnswerResponse(correct, correct ? "정답이에요!" : "표현의 뜻을 다시 살펴봐요.", item.getDueAt(), item.getStage());
     }
 
+    /**
+     * 최근 학습한 단어. 프론트가 보내는 학습 이벤트뿐 아니라, 서버에 남은 문장 첨삭 기록과
+     * 끝난 대화 기록도 같이 본다 (이벤트가 빠져도 단계가 올라가도록).
+     */
     List<LearningController.RecentVocabulary> recent(String userId, String childId, int limit) {
         childService.getOwnedChild(userId, childId);
-        // 이벤트는 최근 순이라, 단어가 처음 나올 때가 그 단어를 마지막으로 공부한 때다
-        Map<String, LearningEvent> latest = new LinkedHashMap<>();
+        Map<String, PageExpression> words = new HashMap<>();
+        Map<String, Instant> lastAt = new HashMap<>();
         Map<String, LearningStatus> stage = new HashMap<>();
+        java.util.function.BiConsumer<PageExpression, Object[]> add = (e, x) -> {
+            LearningStatus s = (LearningStatus) x[0]; Instant at = (Instant) x[1];
+            words.putIfAbsent(e.getId(), e);
+            lastAt.merge(e.getId(), at, (a, b) -> a.isAfter(b) ? a : b);
+            stage.merge(e.getId(), s, (a, b) -> a.ordinal() >= b.ordinal() ? a : b);
+        };
         for (LearningEvent ev : eventRepository.findAllByChildIdOrderByOccurredAtDesc(childId)) {
             if (ev.getExpression() == null) continue;
-            String id = ev.getExpression().getId();
-            latest.putIfAbsent(id, ev);
             LearningStatus s = switch (ev.getType()) {
                 case WORD_VIEWED, AUDIO_PLAYED, SENTENCE_STARTED -> LearningStatus.VIEWED;
                 case SENTENCE_COMPLETED -> LearningStatus.SENTENCE_DONE;
                 case DIALOGUE_COMPLETED -> LearningStatus.CONVERSATION_DONE;
             };
-            stage.merge(id, s, (a, b) -> a.ordinal() >= b.ordinal() ? a : b);
+            add.accept(ev.getExpression(), new Object[]{s, ev.getOccurredAt()});
         }
-        return latest.values().stream().limit(limit).map(ev -> {
-            PageExpression e = ev.getExpression();
-            return new LearningController.RecentVocabulary(e.getId(), e.getText(), e.getType().name(),
-                    e.getPage().getBook().getId(), e.getPage().getBook().getTitle(),
-                    stage.get(e.getId()).name(), ev.getOccurredAt());
-        }).toList();
+        // 문장 첨삭을 한 번이라도 받았으면 문장 연습 완료
+        for (SentencePractice p : practiceRepository.findAllByChildIdOrderByCreatedAtDesc(childId)) {
+            add.accept(p.getExpression(), new Object[]{LearningStatus.SENTENCE_DONE, p.getCreatedAt()});
+        }
+        // 한 번 이상 답하고 끝난 대화가 있으면 대화 완료
+        List<Object[]> conversations = entityManager.createQuery("""
+                select s.expression, s.updatedAt from ConversationSession s
+                where s.child.id = :childId and s.turnCount > 0
+                  and s.status = com.line1.booktalk.domain.conversation.ConversationStatus.COMPLETED
+                """, Object[].class).setParameter("childId", childId).getResultList();
+        for (Object[] row : conversations) {
+            add.accept((PageExpression) row[0], new Object[]{LearningStatus.CONVERSATION_DONE, row[1]});
+        }
+        return words.values().stream()
+                .sorted(Comparator.comparing((PageExpression e) -> lastAt.get(e.getId())).reversed())
+                .limit(limit)
+                .map(e -> new LearningController.RecentVocabulary(e.getId(), e.getText(), e.getType().name(),
+                        e.getPage().getBook().getId(), e.getPage().getBook().getTitle(),
+                        stage.get(e.getId()).name(), lastAt.get(e.getId())))
+                .toList();
     }
 
     LearningController.LearningSummary summary(String userId, String childId, SummaryPeriod period) {
